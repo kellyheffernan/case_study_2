@@ -7,6 +7,10 @@ MACHINE="paffenroth-23.dyn.wpi.edu"
 REMOTE_USER="student-admin"
 
 PRIVATE_KEY="${HOME}/.ssh/kelly_cs2"
+
+BOOTSTRAP_PRIVATE_KEY="${HOME}/.ssh/student-admin_key"
+BOOTSTRAP_PUBLIC_KEY="${BOOTSTRAP_PRIVATE_KEY}.pub"
+
 PUBLIC_URL="http://${MACHINE}:8016/"
 SERVICE_NAME="group16-recipe-chatbot"
 
@@ -121,7 +125,31 @@ wait_for_http_recovery() {
 }
 
 if ! ssh_is_available; then
-    fail "Application is unhealthy and Group 16 SSH is unavailable."
+    log "WARNING" "Group 16 SSH failed with kelly_cs2."
+
+    if [[ ! -f "${DEPLOY_FIRST}" ]]; then
+        fail "SSH bootstrap script not found: ${DEPLOY_FIRST}"
+    fi
+
+    if [[ ! -f "${BOOTSTRAP_PRIVATE_KEY}" ]]; then
+        fail "Bootstrap private key not found: ${BOOTSTRAP_PRIVATE_KEY}"
+    fi
+
+    if [[ ! -f "${BOOTSTRAP_PUBLIC_KEY}" ]]; then
+        fail "Bootstrap public key not found: ${BOOTSTRAP_PUBLIC_KEY}"
+    fi
+
+    log "INFO" "Attempting safe SSH bootstrap recovery."
+
+    if ! bash "${DEPLOY_FIRST}" "${BOOTSTRAP_PRIVATE_KEY}"; then
+        fail "SSH bootstrap recovery failed."
+    fi
+
+    if ! ssh_is_available; then
+        fail "kelly_cs2 still does not work after bootstrap recovery."
+    fi
+
+    log "RECOVERED" "Group 16 SSH access was restored with kelly_cs2."
 fi
 
 log "INFO" "SSH is available; requesting a systemd service restart."
