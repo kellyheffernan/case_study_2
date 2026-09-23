@@ -19,20 +19,32 @@ fi
 
 SSH_TARGET="${REMOTE_USER}@${MACHINE}"
 
+# Course-VM recovery tradeoff:
+# A recreated VM may present a new SSH host key at the same hostname and port.
+# This keeps the exception local to this script rather than weakening global SSH.
+HOST_KEY_OPTIONS=(
+    -o StrictHostKeyChecking=no
+    -o UserKnownHostsFile=/dev/null
+)
+
 SSH_OPTIONS=(
     -p "${PORT}"
     -o BatchMode=yes
     -o IdentitiesOnly=yes
-    -o StrictHostKeyChecking=accept-new
+    -o ForwardAgent=no
+    -o ClearAllForwardings=yes
     -o ConnectTimeout=10
+    "${HOST_KEY_OPTIONS[@]}"
 )
 
 SCP_OPTIONS=(
     -P "${PORT}"
     -o BatchMode=yes
     -o IdentitiesOnly=yes
-    -o StrictHostKeyChecking=accept-new
+    -o ForwardAgent=no
+    -o ClearAllForwardings=yes
     -o ConnectTimeout=10
+    "${HOST_KEY_OPTIONS[@]}"
 )
 
 if [[ ! -f "${NEW_PRIVATE_KEY}" ]]; then
