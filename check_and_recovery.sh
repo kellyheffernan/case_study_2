@@ -25,6 +25,8 @@ DEPLOY_SECOND="${SCRIPT_DIR}/deploy_second_part.sh"
 STATE_DIR="${HOME}/.local/state/group16-recovery"
 LOG_FILE="${STATE_DIR}/recovery.log"
 
+LOCK_FILE="${STATE_DIR}/recovery.lock"
+
 SSH_TARGET="${REMOTE_USER}@${MACHINE}"
 
 HOST_KEY_OPTIONS=(
@@ -59,6 +61,17 @@ fail() {
     log "ERROR" "$*"
     exit 1
 }
+
+if command -v flock >/dev/null 2>&1; then
+    exec 9>"${LOCK_FILE}"
+
+    if ! flock -n 9; then
+        log "INFO" "Another recovery check is already running; exiting."
+        exit 0
+    fi
+else
+    log "WARNING" "flock is unavailable; overlap protection is disabled."
+fi
 
 log "INFO" "Starting Group 16 health check."
 
