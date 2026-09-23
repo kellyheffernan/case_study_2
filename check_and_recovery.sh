@@ -117,6 +117,26 @@ ssh_is_available() {
         >/dev/null 2>&1
 }
 
+wait_for_normal_ssh() {
+    local max_attempts=12
+    local wait_seconds=10
+    local attempt
+
+    for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+        if ssh_is_available; then
+            return 0
+        fi
+
+        log \
+            "INFO" \
+            "Normal SSH is unavailable; retrying (${attempt}/${max_attempts})."
+
+        sleep "${wait_seconds}"
+    done
+
+    return 1
+}
+
 wait_for_http_recovery() {
     local max_attempts=36
     local wait_seconds=5
@@ -138,31 +158,44 @@ wait_for_http_recovery() {
 }
 
 if ! ssh_is_available; then
-    log "WARNING" "Group 16 SSH failed with kelly_cs2."
+    log "WARNING" "Normal SSH is temporarily unavailable."
 
-    if [[ ! -f "${DEPLOY_FIRST}" ]]; then
-        fail "SSH bootstrap script not found: ${DEPLOY_FIRST}"
+    if wait_for_normal_ssh; then
+        log "INFO" "Normal SSH returned without bootstrap recovery."
+
+        if wait_for_http_recovery; then
+            log "RECOVERED" "Application recovered after temporary VM unavailability."
+            exit 0
+        fi
+
+        log "WARNING" "SSH returned, but the application is still unhealthy."
+    else
+        log "WARNING" "Normal SSH did not recover within the retry period."
+
+        if [[ ! -f "${DEPLOY_FIRST}" ]]; then
+            fail "SSH bootstrap script not found: ${DEPLOY_FIRST}"
+        fi
+
+        if [[ ! -f "${BOOTSTRAP_PRIVATE_KEY}" ]]; then
+            fail "Bootstrap private key not found: ${BOOTSTRAP_PRIVATE_KEY}"
+        fi
+
+        if [[ ! -f "${BOOTSTRAP_PUBLIC_KEY}" ]]; then
+            fail "Bootstrap public key not found: ${BOOTSTRAP_PUBLIC_KEY}"
+        fi
+
+        log "INFO" "Attempting safe SSH bootstrap recovery."
+
+        if ! bash "${DEPLOY_FIRST}" "${BOOTSTRAP_PRIVATE_KEY}"; then
+            fail "SSH bootstrap recovery failed."
+        fi
+
+        if ! ssh_is_available; then
+            fail "kelly_cs2 still does not work after bootstrap recovery."
+        fi
+
+        log "RECOVERED" "Group 16 SSH access was restored with kelly_cs2."
     fi
-
-    if [[ ! -f "${BOOTSTRAP_PRIVATE_KEY}" ]]; then
-        fail "Bootstrap private key not found: ${BOOTSTRAP_PRIVATE_KEY}"
-    fi
-
-    if [[ ! -f "${BOOTSTRAP_PUBLIC_KEY}" ]]; then
-        fail "Bootstrap public key not found: ${BOOTSTRAP_PUBLIC_KEY}"
-    fi
-
-    log "INFO" "Attempting safe SSH bootstrap recovery."
-
-    if ! bash "${DEPLOY_FIRST}" "${BOOTSTRAP_PRIVATE_KEY}"; then
-        fail "SSH bootstrap recovery failed."
-    fi
-
-    if ! ssh_is_available; then
-        fail "kelly_cs2 still does not work after bootstrap recovery."
-    fi
-
-    log "RECOVERED" "Group 16 SSH access was restored with kelly_cs2."
 fi
 
 log "INFO" "SSH is available; requesting a systemd service restart."
