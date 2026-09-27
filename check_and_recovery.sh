@@ -5,7 +5,7 @@
 #it determines the recovery steps necessary.
 # in a full recovery: deploys the other deploy_first_part and deploy_second_part scripts
 # it is important to note that i wrote a cron job to automatically launch this script
-# it gets launched every 15 minutes to check! this way it works even when I am asleep
+# it gets launched every 5 minutes to check! this way it works even when I am asleep
 # steps:
 # checks if the app is responding
 # if not, checks ssh access to the VM.
