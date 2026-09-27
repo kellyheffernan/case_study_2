@@ -1,11 +1,22 @@
+# script summary: locks down access on the virtual machine by using a secure ssh key for group 16.
+# deployed from my active WPI linux server account. This server contains the secure private key.
+# steps: checks that my key doesn't already work. If it doesn't, it uses Randy's bootstrap key to gain access.
+# then it installs my secure public key on the virtual machine.
+# then it verifies my key. Only then does it remove Randy's key (to avoid bricking)
+# finally, it does a connection check again with my group 16 key.
+
 #!/usr/bin/env bash
 
+#exit the script if there's a failure, and report the error
 set -Eeuo pipefail
 
+#my settings for the port, machine, and remote user
 PORT=22016
 MACHINE="paffenroth-23.dyn.wpi.edu"
 REMOTE_USER="student-admin"
 
+#paths to the private key and public key I made on the wpi linux machine i'm using to run this
+#scp copies the public key on to the virtual machine.
 NEW_PRIVATE_KEY="${HOME}/.ssh/kelly_cs2"
 NEW_PUBLIC_KEY="${NEW_PRIVATE_KEY}.pub"
 
@@ -13,10 +24,12 @@ NEW_PUBLIC_KEY="${NEW_PRIVATE_KEY}.pub"
 OLD_PRIVATE_KEY="${1:-}"
 OLD_PUBLIC_KEY=""
 
+#getting path to the old public key based on the old private key if it exists
 if [[ -n "${OLD_PRIVATE_KEY}" ]]; then
     OLD_PUBLIC_KEY="${OLD_PRIVATE_KEY}.pub"
 fi
 
+#combining the remote username and the machine host name for all the ssh/scp commands
 SSH_TARGET="${REMOTE_USER}@${MACHINE}"
 
 # Course-VM recovery tradeoff:
@@ -27,6 +40,7 @@ HOST_KEY_OPTIONS=(
     -o UserKnownHostsFile=/dev/null
 )
 
+#keeping connection settings consistent across SSH and SCP commands
 SSH_OPTIONS=(
     -p "${PORT}"
     -o BatchMode=yes
@@ -47,6 +61,7 @@ SCP_OPTIONS=(
     "${HOST_KEY_OPTIONS[@]}"
 )
 
+#checking that the private and public keys exist
 if [[ ! -f "${NEW_PRIVATE_KEY}" ]]; then
     echo "ERROR: New private key not found: ${NEW_PRIVATE_KEY}"
     exit 1
@@ -56,6 +71,12 @@ if [[ ! -f "${NEW_PUBLIC_KEY}" ]]; then
     echo "ERROR: New public key not found: ${NEW_PUBLIC_KEY}"
     exit 1
 fi
+
+#checking if the key already works (if the machine was not reset)
+#if it doesn't work, then this will use randy's originally provided bootstrap key first
+#it then opens a new vm connection to check that his key works
+#then it will upload my group 16 public key to the virtual machine from the linux machine
+#then open a new connection, check that it works before continuing on
 
 echo "Checking whether the Group 16 key already works..."
 
@@ -154,7 +175,8 @@ else
 fi
 
 # Randy's key is removed only when its exact public key was supplied.
-# Randy's key is removed only when its exact public key was supplied.
+# making sure that my group 16 key and randy's key are not the same
+#to avoid accidental removal/bricking of the virtual machine
 if [[ -n "${OLD_PUBLIC_KEY}" && -f "${OLD_PUBLIC_KEY}" ]]; then
     if cmp -s "${NEW_PUBLIC_KEY}" "${OLD_PUBLIC_KEY}"; then
         echo "ERROR: The old and new public keys are identical."
