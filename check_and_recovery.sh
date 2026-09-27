@@ -1,32 +1,55 @@
 #!/usr/bin/env bash
 
+#script summary: this script monitors our chatbot.
+# if it sees that the chatbot has gone down (as it will when the vm is re-set)
+#it determines the recovery steps necessary.
+# in a full recovery: deploys the other deploy_first_part and deploy_second_part scripts
+# it is important to note that i wrote a cron job to automatically launch this script
+# it gets launched every 15 minutes to check! this way it works even when I am asleep
+# steps:
+# checks if the app is responding
+# if not, checks ssh access to the VM.
+# if ssh access is not working, it deploys deploy_first_part to restore secure ssh access.
+# if ssh access works, but the app is down, it restarts the systemd service to restart the app.
+# that was originally created in the deploy_second_part script.
+# if that doesn't work, it uses deploy_second_part to fully redeploy the app.
+# it saves everything in a log file we can look at for troubleshooting.
+
 set -Eeuo pipefail
 
+#connections for group 16
 PORT=22016
 MACHINE="paffenroth-23.dyn.wpi.edu"
 REMOTE_USER="student-admin"
 
+#private key on my secure linux server
 PRIVATE_KEY="${HOME}/.ssh/kelly_cs2"
 
+#bootstrap keys if necessary after a full recreation
 BOOTSTRAP_PRIVATE_KEY="${HOME}/.ssh/student-admin_key"
 BOOTSTRAP_PUBLIC_KEY="${BOOTSTRAP_PRIVATE_KEY}.pub"
 
+#url for checking if the app is externally working
 PUBLIC_URL="http://${MACHINE}:8016/"
 SERVICE_NAME="group16-recipe-chatbot"
 
+#this scripts location
 SCRIPT_DIR=$(
     cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1
     pwd
 )
 
+#other scripts locations
 DEPLOY_FIRST="${SCRIPT_DIR}/deploy_first_part.sh"
 DEPLOY_SECOND="${SCRIPT_DIR}/deploy_second_part.sh"
 
+# recovery log files
 STATE_DIR="${HOME}/.local/state/group16-recovery"
 LOG_FILE="${STATE_DIR}/recovery.log"
 
 LOCK_FILE="${STATE_DIR}/recovery.lock"
 
+#ssh settings 
 SSH_TARGET="${REMOTE_USER}@${MACHINE}"
 
 HOST_KEY_OPTIONS=(
@@ -46,6 +69,7 @@ SSH_OPTIONS=(
 
 mkdir -p "${STATE_DIR}"
 
+#custom logging function for troubleshooting
 log() {
     local level="$1"
     shift
@@ -62,6 +86,10 @@ fail() {
     exit 1
 }
 
+#this locks the recovery process so only one copy of this script runs at a time
+# otherwise they could potentially interfere with each other. 
+# this is important because I'm using a cron job to automatically launch this script every 15 minutes.
+# if somehow cron messes up and launches two instances of this at the same time, the lock file will prevent them from interfering with each other.
 if command -v flock >/dev/null 2>&1; then
     exec 9>"${LOCK_FILE}"
 
@@ -75,6 +103,7 @@ fi
 
 log "INFO" "Starting Group 16 health check."
 
+#checks the secure linux server for commands and ssh keys.
 for required_command in curl ssh; do
     if ! command -v "${required_command}" >/dev/null 2>&1; then
         fail "Required command is unavailable: ${required_command}"
@@ -91,6 +120,7 @@ fi
 
 log "INFO" "Recovery-script preflight checks passed."
 
+#function to check that the app is accessible from the url 
 http_is_healthy() {
     curl \
         --fail \
@@ -108,6 +138,7 @@ fi
 
 log "WARNING" "Public application health check failed: ${PUBLIC_URL}"
 
+#checks if secure group 16 key is working
 ssh_is_available() {
     ssh \
         -i "${PRIVATE_KEY}" \
@@ -117,6 +148,8 @@ ssh_is_available() {
         >/dev/null 2>&1
 }
 
+# waits for a little bit (2 minutes) before running the full VM reset app redeployment.
+# just in case there was a temporary connection problem. 
 wait_for_normal_ssh() {
     local max_attempts=12
     local wait_seconds=10
@@ -137,6 +170,7 @@ wait_for_normal_ssh() {
     return 1
 }
 
+# gives three minutes of buffer time to check that the recovery failed or not
 wait_for_http_recovery() {
     local max_attempts=36
     local wait_seconds=5
@@ -157,6 +191,8 @@ wait_for_http_recovery() {
     return 1
 }
 
+#checks if ssh unavailability is temporary or not.
+# if it doesn't return, it runs the full bootstrap recovery.
 if ! ssh_is_available; then
     log "WARNING" "Normal SSH is temporarily unavailable."
 
@@ -185,7 +221,7 @@ if ! ssh_is_available; then
         fi
 
         log "INFO" "Attempting safe SSH bootstrap recovery."
-
+    # runs the first deploy script to restore SSH access
         if ! bash "${DEPLOY_FIRST}" "${BOOTSTRAP_PRIVATE_KEY}"; then
             fail "SSH bootstrap recovery failed."
         fi
@@ -198,6 +234,7 @@ if ! ssh_is_available; then
     fi
 fi
 
+# tries to restart the systemd service if SSH is available to avoid a full redeployment
 log "INFO" "SSH is available; requesting a systemd service restart."
 
 if ssh \
@@ -220,6 +257,7 @@ fi
 
 log "INFO" "Attempting full application redeployment."
 
+# runs the second deploy script to fully redeploy the application if the systemd restart failed
 if bash "${DEPLOY_SECOND}"; then
     if http_is_healthy; then
         log "RECOVERED" "Application recovered after full redeployment."
