@@ -82,7 +82,7 @@ fi
 echo "Local deployment preflight checks passed."
 
 #double checking group 16 ssh key works to connect to the VM
-# also reports if the VM has git, python, and the virtual environment support installed.
+# also reports if the VM has git and python installed.
 echo "Verifying SSH access to the Group 16 VM..."
 
 ssh \
@@ -101,13 +101,7 @@ ssh \
          else
              printf "MISSING: %s\n" "${required_command}"
          fi
-     done
-
-     if python3 -m venv --help >/dev/null 2>&1; then
-         printf "AVAILABLE: python3-venv\n"
-     else
-         printf "MISSING: python3-venv\n"
-     fi'
+     done'
 
 echo "Remote deployment preflight completed."
 
