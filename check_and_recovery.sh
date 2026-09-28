@@ -5,7 +5,7 @@
 #it determines the recovery steps necessary.
 # in a full recovery: deploys the other deploy_first_part and deploy_second_part scripts
 # it is important to note that i wrote a cron job to automatically launch this script
-# it gets launched every 5 minutes to check! this way it works even when I am asleep
+# it gets launched every 1 minute to check! this way it works even when I am asleep
 # steps:
 # checks if the app is responding
 # if not, checks ssh access to the VM.
@@ -88,8 +88,8 @@ fail() {
 
 #this locks the recovery process so only one copy of this script runs at a time
 # otherwise they could potentially interfere with each other. 
-# this is important because I'm using a cron job to automatically launch this script every 15 minutes.
-# if somehow cron messes up and launches two instances of this at the same time, the lock file will prevent them from interfering with each other.
+# this is important because I'm using a cron job to automatically launch this script every 1 minute.
+# if tries to launch two instances of this at the same time, the lock file will prevent them from interfering with each other.
 if command -v flock >/dev/null 2>&1; then
     exec 9>"${LOCK_FILE}"
 
