@@ -184,12 +184,14 @@ if [[ ! -f "${REQUIREMENTS_FILE}" ]]; then
     exit 1
 fi
 
-if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
-    echo "Creating Python virtual environment..."
-    python3 -m venv "${VENV_DIR}"
-else
-    echo "Existing Python virtual environment found."
-fi
+# make sure the VM has the package needed to create Python virtual environments
+echo "Ensuring Python virtual environment support is installed..."
+sudo apt install -qq -y python3-venv
+
+# a full redeployment gets a fresh virtual environment
+echo "Creating a fresh Python virtual environment..."
+rm -rf "${VENV_DIR}"
+python3 -m venv "${VENV_DIR}"
 
 echo "Installing application dependencies..."
 
