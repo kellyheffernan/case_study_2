@@ -71,6 +71,8 @@ def respond(
     hf_token, #this is going to be provided by the user 
 ):
     messages = [{"role": "system", "content": system_message}]
+    #temporary debugging statement
+    print("[DEBUG HISTORY]", repr(history))
     messages.extend(history)
     pantry_text = ", ".join(pantry_staples) if pantry_staples else "None selected"
     messages.append(
@@ -241,6 +243,6 @@ if __name__ == "__main__":
         theme=gr.themes.Soft(),
         css=fancy_css,
         allowed_paths=["cute_kitchen_background.png"],
-        server_name = '0.0.0.0', #from Simeon's code, this means listen for all traffic
+        server_name = '0.0.0.0', #from Simeon's code, make accessible on local network
         server_port = 7860 #server port for the VM
     )
