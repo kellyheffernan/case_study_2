@@ -1,5 +1,5 @@
 # we made a cron job to run on our wpi linux server
-# it runs the check_and_recovery.sh script every five minutes
+# it runs the check_and_recovery.sh script every minute
 # this checks that the chatbot is still running 
 
 # if it detects an outage, it will initiate a series of escalating recovery steps
@@ -15,4 +15,4 @@
 SHELL=/bin/bash
 PATH=/usr/local/bin:/usr/bin:/bin
 
- */5 * * * * /home/my_wpi_username/case_study_2/check_and_recovery.sh >> /home/my_wpi_username/.local/state/group16-recovery/cron.log 2>&1
+ * * * * * /home/my_wpi_username/case_study_2/check_and_recovery.sh >> /home/my_wpi_username/.local/state/group16-recovery/cron.log 2>&1
