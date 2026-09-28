@@ -60,6 +60,26 @@ def local_generate(
 
     return outputs[0]["generated_text"][-1]["content"]
 
+# had to add this to fix a bug if you test remote model, then local, the input to local is no longer acceptable to internal qwen logic
+def normalize_history(history):
+    normalized = []
+
+    for item in history:
+        content = item["content"]
+
+        if isinstance(content, list):
+            content = "".join(
+                part.get("text", "")
+                for part in content
+                if isinstance(part, dict) and part.get("type") == "text"
+            )
+
+        normalized.append({
+            "role": item["role"],
+            "content": content,
+        })
+
+    return normalized
 
 def respond(
     message,
@@ -71,9 +91,7 @@ def respond(
     hf_token, #this is going to be provided by the user 
 ):
     messages = [{"role": "system", "content": system_message}]
-    #temporary debugging statement
-    print("[DEBUG HISTORY]", repr(history))
-    messages.extend(history)
+    messages.extend(normalize_history(history))
     pantry_text = ", ".join(pantry_staples) if pantry_staples else "None selected"
     messages.append(
     {
