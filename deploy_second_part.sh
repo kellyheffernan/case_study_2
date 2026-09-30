@@ -196,7 +196,7 @@ echo "Installing application dependencies..."
 echo "Validating required Python imports..."
 
 "${VENV_DIR}/bin/python" -c \
-    "import accelerate, gradio, huggingface_hub, transformers"
+    "import accelerate, gradio, huggingface_hub, torch, transformers"
 
 echo "Python environment is ready."
 REMOTE_SCRIPT
