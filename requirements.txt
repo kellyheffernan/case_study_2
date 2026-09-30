@@ -1,5 +1,7 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch==2.7.0+cpu
 transformers>=4.56,<5
 accelerate>=1.0
-gradio
-# don't need spaces anymore
-huggingface_hub
+gradio>=5,<7
+huggingface_hub>=0.34,<1
