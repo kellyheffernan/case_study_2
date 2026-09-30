@@ -192,6 +192,9 @@ wait_for_http_recovery() {
 }
 
 #checks if ssh unavailability is temporary or not.
+# tracks whether Part 1 was required to restore SSH after a VM reset
+BOOTSTRAP_RECOVERY_USED=false
+
 # if it doesn't return, it runs the full bootstrap recovery.
 if ! ssh_is_available; then
     log "WARNING" "Normal SSH is temporarily unavailable."
@@ -231,33 +234,40 @@ if ! ssh_is_available; then
         fi
 
         log "RECOVERED" "Group 16 SSH access was restored with kelly_cs2."
+        BOOTSTRAP_RECOVERY_USED=true
     fi
 fi
 
-# tries to restart the systemd service if SSH is available to avoid a full redeployment
-log "INFO" "SSH is available; requesting a systemd service restart."
-
-if ssh \
-    -i "${PRIVATE_KEY}" \
-    "${SSH_OPTIONS[@]}" \
-    "${SSH_TARGET}" \
-    "sudo systemctl restart ${SERVICE_NAME}.service"
-then
-    log "INFO" "Service restart command completed."
-
-    if wait_for_http_recovery; then
-        log "RECOVERED" "Application recovered after a systemd restart."
-        exit 0
-    fi
-
-    log "WARNING" "Service restart did not restore application health."
+# if Part 1 was required, assume the VM was reset and go directly
+# to Part 2 instead of trying to restart a service that may no longer exist
+if [[ "${BOOTSTRAP_RECOVERY_USED}" == true ]]; then
+    log "INFO" "Bootstrap recovery was required; skipping systemd restart."
 else
-    log "WARNING" "The systemd restart command failed."
+    # tries to restart the systemd service if SSH is available to avoid a full redeployment
+    log "INFO" "SSH is available; requesting a systemd service restart."
+
+    if ssh \
+        -i "${PRIVATE_KEY}" \
+        "${SSH_OPTIONS[@]}" \
+        "${SSH_TARGET}" \
+        "sudo systemctl restart ${SERVICE_NAME}.service"
+    then
+        log "INFO" "Service restart command completed."
+
+        if wait_for_http_recovery; then
+            log "RECOVERED" "Application recovered after a systemd restart."
+            exit 0
+        fi
+
+        log "WARNING" "Service restart did not restore application health."
+    else
+        log "WARNING" "The systemd restart command failed."
+    fi
 fi
 
 log "INFO" "Attempting full application redeployment."
 
-# runs the second deploy script to fully redeploy the application if the systemd restart failed
+# runs the second deploy script to fully redeploy the application
 if bash "${DEPLOY_SECOND}"; then
     if http_is_healthy; then
         log "RECOVERED" "Application recovered after full redeployment."
