@@ -170,9 +170,9 @@ wait_for_normal_ssh() {
     return 1
 }
 
-# gives three minutes of buffer time to check that the recovery failed or not
+# gives ten minutes of buffer time to check that the recovery failed or not
 wait_for_http_recovery() {
-    local max_attempts=36
+    local max_attempts=120
     local wait_seconds=5
     local attempt
 

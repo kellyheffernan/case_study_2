@@ -302,7 +302,7 @@ set -Eeuo pipefail
 SERVICE_NAME="$1"
 INTERNAL_PORT="$2"
 
-MAX_ATTEMPTS=36
+MAX_ATTEMPTS=120
 WAIT_SECONDS=5
 
 for ((attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)); do
