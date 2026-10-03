@@ -1,0 +1,33 @@
+name: VM Resource Monitor
+
+on:
+  schedule:
+    # Runs every 5 minutes (Github's mac cron cadence)
+    - cron: '*/5 * * * *'
+  # Allows manual trigger testing from the Github UI
+  workflow_dispatch:
+
+jobs:
+  check-vm-resources:
+    # Forces the workflow exectution inside the VPN-protected VM
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout Local Repository Context
+      uses: actions/checkout@v4
+
+      # Since this is a self-hosted runner, Python, psutil, and pynvml are 
+      # already installed on host system. The step below ensures they are ready
+    - name: Verify Environment Dependencies
+      run: |
+        python3 -m pip install --user --upgrade pip
+        python3 -m pip install --user psutil pynvml requests
+
+    - name: Run Telemetry Audit
+      env:
+        DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        THRESHOLD_GPU_UTIL: 80.0
+        THRESHOLD_GPU_MEM: 80.0
+        THRESHOLD_CPU: 80.0
+        THRESHOLD_RAM: 80.0
+      run: python3 check_metrics.py
