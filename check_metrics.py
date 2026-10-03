@@ -1,0 +1,53 @@
+# Tracks resource usage on the VM and sends a message to the team through Discord if the usage exceeds a certain threshold.
+# Then automatically reacts to the high resource usage by some action, such as temporarily switching to a smaller model or 
+# reject/delay new requests until the usage drops back to normal levels.
+# Then documents the threshold used, how resouce usage is measured, what automated actions are taken, and how the system returns to normal operation 
+# once the resource usage drops back to normal levels.
+
+import os
+import requests
+import psutil
+
+try:
+    import pynvml
+    pynvml.nvmlInit()
+    GPU_AVAILABLE = True
+except ImportError:
+    GPU_AVAILABLE = False
+    print("NVIDIA Management Library (pynvml) is not installed. GPU monitoring will be disabled.")
+
+    # Load Configuration from GitHub Action Environment Variables
+    DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+    THRESHOLD_GPU_UTIL = float(os.getenv("THRESHOLD_GPU_UTIL", 80))  # Utilization threshold in percentage
+    THRESHOLD_GPU_MEM = float(os.getenv("THRESHOLD_GPU_MEM", 80))  # Memory usage threshold in percentage
+    THRESHOLD_CPU = float(os.getenv("THRESHOLD_CPU", 80))  # CPU usage threshold in percentage
+    THRESHOLD_RAM = float(os.getenv("THRESHOLD_RAM", 80))  # RAM usage threshold in percentage
+
+    def send_discord_message(resource_name, current_val, threshold_val):
+        """
+        Sends a message to the Discord channel if resource usage exceeds the threshold.
+        """
+        hostname = os.uname().nodename if hasattr(os, "uname") else "VPN-Isolated VM"
+        playload = {
+            "username": "Internal Resource Monitor",
+            "embeds": [{
+                "title": "High VM Resource Usage Alert",
+                "description": f"Resource limit surpassed on host: **{hostname}**.",
+                "color": 151158332,  # Red color
+                "fields": [
+                    {"name": "Resource Type", "value": resource_name, "inline": True},
+                    {"name": "Current Usage", "value": f"{current_val:.2f}%", "inline": True},
+                    {"name": "Threshold Limit", "value": f"{threshold_val:.2f}%", "inline": True}
+                ],
+                "timestamp": requests.utils.time.strftime('%Y-%m-%dT%H:%M:%SZ')
+            }]
+        }
+
+        try:
+            res = requests.post(DISCORD_WEBHOOK_URL, json=playload, timeout=10)
+            if res.status_code not in [200, 204]:
+                print(f"Discord responded with error code: {res.status_code}")
+        except Exception as e:
+            print(f"Failed to transmit network notification: {e}")
+
+        
