@@ -14,7 +14,7 @@ try:
     pynvml.nvmlInit()
     GPU_AVAILABLE = True
 except Exception as e:
-    print("NVIDIA Management Library (pynvml) is not installed. GPU monitoring will be disabled.")
+    print("GPU monitoring disabled: NVML library or hardware not detected. Details: {e}")
 
 # Load Configuration from GitHub Action Environment Variables
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
