@@ -18,10 +18,10 @@ except Exception as e:
 
 # Load Configuration from GitHub Action Environment Variables
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
-THRESHOLD_GPU_UTIL = float(os.getenv("THRESHOLD_GPU_UTIL", 80))  # Utilization threshold in percentage
-THRESHOLD_GPU_MEM = float(os.getenv("THRESHOLD_GPU_MEM", 80))  # Memory usage threshold in percentage
-THRESHOLD_CPU = float(os.getenv("THRESHOLD_CPU", 80))  # CPU usage threshold in percentage
-THRESHOLD_RAM = float(os.getenv("THRESHOLD_RAM", 80))  # RAM usage threshold in percentage
+THRESHOLD_GPU_UTIL = float(os.getenv("THRESHOLD_GPU_UTIL", 20.0))  # Utilization threshold in percentage
+THRESHOLD_GPU_MEM = float(os.getenv("THRESHOLD_GPU_MEM", 20.0))  # Memory usage threshold in percentage
+THRESHOLD_CPU = float(os.getenv("THRESHOLD_CPU", 20.0))  # CPU usage threshold in percentage
+THRESHOLD_RAM = float(os.getenv("THRESHOLD_RAM", 20.0))  # RAM usage threshold in percentage
 
 def send_discord_message(resource_name, current_val, threshold_val):
     """
