@@ -48,11 +48,11 @@ def send_discord_message(resource_name, current_val, threshold_val):
     try:
         res = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
         if res.status_code:
-            print("✅ Discord alert successfully sent!")
+            print("Discord alert successfully sent!")
         else:
-            print(f"❌ Discord responded with an error code: {res.status_code}, Response: {res.text}")
+            print(f"Discord responded with an error code: {res.status_code}, Response: {res.text}")
     except Exception as e:
-        print(f"❌ Failed to transmit network notification: {e}")
+        print(f" Failed to transmit network notification: {e}")
 
 def run_resource_audit():
     # 1) Evaluate Core System Telemetry
@@ -79,7 +79,7 @@ def run_resource_audit():
             mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
             gpu_mem = (mem_info.used / mem_info.total) * 100
             
-            print(f"📊 Current GPU Metrics -> GPU Util: {gpu_util}%, VRAM: {gpu_mem:.1f}%")
+            print(f"Current GPU Metrics -> GPU Util: {gpu_util}%, VRAM: {gpu_mem:.1f}%")
 
             if gpu_util >= THRESHOLD_GPU_UTIL:
                 send_discord_message("GPU Core Utilization", gpu_util, THRESHOLD_GPU_UTIL)
@@ -91,7 +91,7 @@ def run_resource_audit():
             print(f"Error accessing hardware NVML registers: {err}")
 
     if not alert_triggered:
-        print("✅ All resources are below thresholds. No notification required.")
+        print("All resources are below thresholds. No notification required.")
 
 if __name__ == "__main__":
     if not DISCORD_WEBHOOK_URL or DISCORD_WEBHOOK_URL.strip() == "":
