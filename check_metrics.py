@@ -28,8 +28,9 @@ def send_discord_message(resource_name, current_val, threshold_val):
     Sends a message to the Discord channel if resource usage exceeds the threshold.
     """
     hostname = os.uname().nodename if hasattr(os, "uname") else "VPN-Isolated VM"
-    playload = {
+    payload = {
         "username": "Internal Resource Monitor",
+        "content": "@here **Resource Warning Alert!**",
         "embeds": [{
             "title": "High VM Resource Usage Alert",
             "description": f"Resource limit surpassed on host: **{hostname}**.",
@@ -43,46 +44,57 @@ def send_discord_message(resource_name, current_val, threshold_val):
         }]
     }
 
+    print(f"Attempting to send Discord notification for {resource_name}...")
     try:
-        res = requests.post(DISCORD_WEBHOOK_URL, json=playload, timeout=10)
-        if res.status_code not in [200, 204]:
-            print(f"Discord responded with error code: {res.status_code}")
+        res = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
+        if res.status_code:
+            print("✅ Discord alert successfully sent!")
+        else:
+            print(f"❌ Discord responded with an error code: {res.status_code}, Response: {res.text}")
     except Exception as e:
-        print(f"Failed to transmit network notification: {e}")
+        print(f"❌ Failed to transmit network notification: {e}")
 
 def run_resource_audit():
     # 1) Evaluate Core System Telemetry
     cpu_usage = psutil.cpu_percent(interval=1)
     ram_usage = psutil.virtual_memory().percent
 
+    print(f"Current Metrics -> CPU: {cpu_usage}%, RAM: {ram_usage}%")
+    
+    # Track if any alerts triggered
+    alert_triggered = False
+
     if cpu_usage >= THRESHOLD_CPU:
         send_discord_message("CPU Usage", cpu_usage, THRESHOLD_CPU)
+        alert_triggered = True
     if ram_usage >= THRESHOLD_RAM:
         send_discord_message("RAM Usage", ram_usage, THRESHOLD_RAM)
+        alert_triggered = True
 
     # 2) Evaluate Hardware GPU Telemetry (NVIDIA NVML)
     if GPU_AVAILABLE:
         try:
-            handle = pynvml.nvmlDeviceGetHandleByIndex(0) 
-
-            # GPU Core Utilization
-            utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
-            gpu_util = float(utilization.gpu)
-
-            # GPU Memory Allocation
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            gpu_util = float(pynvml.nvmlDeviceGetUtilizationRates(handle).gpu)
             mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
             gpu_mem = (mem_info.used / mem_info.total) * 100
+            
+            print(f"📊 Current GPU Metrics -> GPU Util: {gpu_util}%, VRAM: {gpu_mem:.1f}%")
 
             if gpu_util >= THRESHOLD_GPU_UTIL:
                 send_discord_message("GPU Core Utilization", gpu_util, THRESHOLD_GPU_UTIL)
+                alert_triggered = True
             if gpu_mem >= THRESHOLD_GPU_MEM:
                 send_discord_message("GPU VRAM Usage", gpu_mem, THRESHOLD_GPU_MEM)
-
+                alert_triggered = True
         except Exception as err:
-            print(f"Error acessing hardware NVML registers: {err}")
+            print(f"Error accessing hardware NVML registers: {err}")
+
+    if not alert_triggered:
+        print("✅ All resources are below thresholds. No notification required.")
 
 if __name__ == "__main__":
-    if not DISCORD_WEBHOOK_URL:
+    if not DISCORD_WEBHOOK_URL or DISCORD_WEBHOOK_URL.strip() == "":
         print("Fatal Error: Discord Webhook URL is not set. Please set the DISCORD_WEBHOOK_URL environment variable.")
     else:
         run_resource_audit()
