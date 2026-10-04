@@ -21,7 +21,7 @@ jobs:
     - name: Verify Environment Dependencies
       run: |
         python3 -m pip install --user --upgrade pip
-        python3 -m pip install --user psutil pynvml requests
+        python3 -m pip install --user psutil nvidia-ml-py requests
 
     - name: Run Telemetry Audit
       env:
