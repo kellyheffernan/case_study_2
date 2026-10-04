@@ -35,7 +35,7 @@ def send_discord_message(resource_name, current_val, threshold_val):
         hostname = "VPN-Isolated VM"
 
     # Generate an ISO 8601 string that Discord's embed processor expects
-    iso_timestamp = str(time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()))
+    #iso_timestamp = str(time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()))
     # Explicitly stringify metrics to pass strict JSON payload validation
     resource_str = str(resource_name)
     current_str = f"{float(current_val):.2f}%"
@@ -53,7 +53,7 @@ def send_discord_message(resource_name, current_val, threshold_val):
                 {"name": "Current Usage", "value": current_str, "inline": True},
                 {"name": "Threshold Limit", "value": threshold_str, "inline": True}
             ],
-            "timestamp": iso_timestamp
+            #"timestamp": iso_timestamp
         }]
     }
 
