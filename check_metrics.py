@@ -29,8 +29,12 @@ def send_discord_message(resource_name, current_val, threshold_val):
     Sends a message to the Discord channel if resource usage exceeds the threshold.
     """
     hostname = os.uname().nodename if hasattr(os, "uname") else "VPN-Isolated VM"
+
+    # Generate an ISO 8601 string that Discord's embed processor expects
+    iso_timestamp = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+
+    # Formatted payload matching Discord Webhook execution specs
     payload = {
-        "username": "Internal Resource Monitor",
         "content": "@here **Resource Warning Alert!**",
         "embeds": [{
             "title": "High VM Resource Usage Alert",
@@ -41,19 +45,22 @@ def send_discord_message(resource_name, current_val, threshold_val):
                 {"name": "Current Usage", "value": f"{current_val:.2f}%", "inline": True},
                 {"name": "Threshold Limit", "value": f"{threshold_val:.2f}%", "inline": True}
             ],
-            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+            "timestamp": iso_timestamp
         }]
     }
 
     print(f"Attempting to send Discord notification for {resource_name}...")
     try:
-        res = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
-        if res.status_code:
+        target_url = f"{DISCORD_WEBHOOK_URL.strip()}?wait=true"
+        res = requests.post(target_url, json=payload, timeout=10)
+
+        if res.status_code in [200, 201, 204]:
             print("Discord alert successfully sent!")
         else:
-            print(f"Discord responded with an error code: {res.status_code}, Response: {res.text}")
+            print(f"Discord rejected the message format. Code: {res.status_code}")
+            print(f"Response details: {res.text}")
     except Exception as e:
-        print(f" Failed to transmit network notification: {e}")
+        print(f"Failed to transmit network notification: {e}")
 
 def run_resource_audit():
     # 1) Evaluate Core System Telemetry
