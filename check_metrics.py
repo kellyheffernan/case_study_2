@@ -5,6 +5,7 @@
 # once the resource usage drops back to normal levels.
 
 import os
+import time
 import requests
 import psutil
 
@@ -40,7 +41,7 @@ def send_discord_message(resource_name, current_val, threshold_val):
                 {"name": "Current Usage", "value": f"{current_val:.2f}%", "inline": True},
                 {"name": "Threshold Limit", "value": f"{threshold_val:.2f}%", "inline": True}
             ],
-            "timestamp": requests.utils.time.strftime('%Y-%m-%dT%H:%M:%SZ')
+            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
         }]
     }
 
