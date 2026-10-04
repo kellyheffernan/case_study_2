@@ -8,12 +8,12 @@ import os
 import requests
 import psutil
 
+GPU_AVAILABLE = False
 try:
     import pynvml
     pynvml.nvmlInit()
     GPU_AVAILABLE = True
-except ImportError:
-    GPU_AVAILABLE = False
+except Exception as e:
     print("NVIDIA Management Library (pynvml) is not installed. GPU monitoring will be disabled.")
 
 # Load Configuration from GitHub Action Environment Variables
