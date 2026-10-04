@@ -36,7 +36,6 @@ def send_discord_message(resource_name, current_val, threshold_val):
 
     # Generate an ISO 8601 string that Discord's embed processor expects
     iso_timestamp = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
-    # Explicitly stringify metrics to pass strict JSON payload validation
 
     # Formatted payload matching Discord Webhook execution specs
     payload = {
@@ -56,8 +55,7 @@ def send_discord_message(resource_name, current_val, threshold_val):
 
     print(f"Attempting to send Discord notification for {resource_name}...")
     try:
-        target_url = f"{DISCORD_WEBHOOK_URL.strip()}?wait=true"
-        res = requests.post(target_url, json=payload, timeout=10)
+        res = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
 
         if res.status_code in [200, 201, 204]:
             print("Discord alert successfully sent!")
