@@ -35,11 +35,8 @@ def send_discord_message(resource_name, current_val, threshold_val):
         hostname = "VPN-Isolated VM"
 
     # Generate an ISO 8601 string that Discord's embed processor expects
-   
+    iso_timestamp = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     # Explicitly stringify metrics to pass strict JSON payload validation
-    resource_str = str(resource_name)
-    current_str = f"{float(current_val):.2f}%"
-    threshold_str = f"{float(threshold_val):.2f}%"
 
     # Formatted payload matching Discord Webhook execution specs
     payload = {
@@ -49,11 +46,11 @@ def send_discord_message(resource_name, current_val, threshold_val):
             "description": f"Resource limit surpassed on host: **{hostname}**.",
             "color": 15158332,  # Red color
             "fields": [
-                {"name": "Resource Type", "value": resource_str, "inline": True},
-                {"name": "Current Usage", "value": current_str, "inline": True},
-                {"name": "Threshold Limit", "value": threshold_str, "inline": True}
+                {"name": "Resource Type", "value": resource_name, "inline": True},
+                {"name": "Current Usage", "value": f"{float(current_val):.2f}%", "inline": True},
+                {"name": "Threshold Limit", "value": f"{float(threshold_val):.2f}%", "inline": True}
             ],
-           
+           "timestamp": iso_timestamp
         }]
     }
 
