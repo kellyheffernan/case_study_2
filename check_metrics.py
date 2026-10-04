@@ -47,7 +47,7 @@ def send_discord_message(resource_name, current_val, threshold_val):
         "embeds": [{
             "title": "High VM Resource Usage Alert",
             "description": f"Resource limit surpassed on host: **{hostname}**.",
-            "color": 151158332,  # Red color
+            "color": 15158332,  # Red color
             "fields": [
                 {"name": "Resource Type", "value": resource_str, "inline": True},
                 {"name": "Current Usage", "value": current_str, "inline": True},
