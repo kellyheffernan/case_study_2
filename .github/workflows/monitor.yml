@@ -23,8 +23,8 @@ jobs:
     - name: Run Telemetry Audit
       env:
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        THRESHOLD_GPU_UTIL: 5.0
-        THRESHOLD_GPU_MEM: 5.0
-        THRESHOLD_CPU: 5.0
-        THRESHOLD_RAM: 5.0
+        THRESHOLD_GPU_UTIL: 60.0
+        THRESHOLD_GPU_MEM: 60.0
+        THRESHOLD_CPU: 60.0
+        THRESHOLD_RAM: 60.0
       run: python3 check_metrics.py
