@@ -1,9 +1,6 @@
 name: VM Resource Monitor
 
 on:
-  schedule:
-    # Runs every 5 minutes (Github's mac cron cadence)
-    - cron: '*/5 * * * *'
   # Allows manual trigger testing from the Github UI
   workflow_dispatch:
 

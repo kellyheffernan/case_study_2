@@ -33,6 +33,9 @@ THRESHOLD_GPU_MEM = float(os.getenv("THRESHOLD_GPU_MEM", 5.0))  # Memory usage t
 THRESHOLD_CPU = float(os.getenv("THRESHOLD_CPU", 5.0))  # CPU usage threshold in percentage
 THRESHOLD_RAM = float(os.getenv("THRESHOLD_RAM", 5.0))  # RAM usage threshold in percentage
 
+# A manual run sends one alert even if the overload is already ongoing; scheduled runs only alert on transitions.
+IS_MANUAL_RUN = os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
+
 # Maps each metric name to its threshold so readings and limits stay in sync
 LIMITS = {
     "CPU Usage": THRESHOLD_CPU,
@@ -41,17 +44,42 @@ LIMITS = {
     "GPU VRAM Usage": THRESHOLD_GPU_MEM,
 }
 
+# Mitigation actions the monitor can randomly choose from (one per overload event).
+ACTION_WEIGHTS = {
+    "SMALL_MODEL": 1,
+    "REJECT_503": 1,
+    "BANNER": 0.5,
+}
+
+ACTION_DESCRIPTIONS = {
+    "SMALL_MODEL": "Switched to a smaller model for incoming requests",
+    "REJECT_503": "Rejecting new requests with HTTP 503 (system at capacity)",
+    "BANNER": "Serving requests normally with a 'near capacity' warning banner",
+}
+
+def read_active_action():
+    """Returns the ACTION stored on line 1 of the flag file, or None."""
+    try:
+        with open(FLAG_FILE_PATH) as f:
+            first_line = f.readline().strip()
+        if first_line.startswith("ACTION="):
+            value = first_line.split("=", 1)[1].strip()
+            if value in ACTION_DESCRIPTIONS:
+                return value
+    except Exception:
+        pass
+    return None
+
 def read_recent_history(n=10):
-    """[NEW] Returns the last n lines of the overload ledger (empty list if none)."""
+    """Returns the last n lines of the overload ledger (empty list if none)."""
     try:
         with open(HISTORY_LOG_PATH) as f:
             return f.readlines()[-n:]
     except Exception:
         return []
- 
- 
-def write_system_documentation(state, readings, surpassed, actions):
-    """[CHANGED] Writes a manifest describing what THIS run measured, decided, and did."""
+
+def write_system_documentation(state, readings, surpassed, actions, chosen_actions=None):
+    """Writes a manifest describing what THIS run measured, decided, and did."""
     now = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
     over = {name for name, _, _ in surpassed}
  
@@ -62,6 +90,13 @@ def write_system_documentation(state, readings, surpassed, actions):
     actions_md = "\n".join(f"{i}. {a}" for i, a in enumerate(actions, 1))
     history_md = "".join(f"- {line}" for line in read_recent_history()) or "- No events logged yet.\n"
     gpu_note = "GPU metrics read via NVML (device 0)." if GPU_AVAILABLE else "No GPU detected; GPU metrics skipped."
+ 
+    if chosen_actions and state == "RECOVERED":
+        mitigation = f"**{chosen_actions}** ({ACTION_DESCRIPTIONS[chosen_actions]}) was lifted this run."
+    elif chosen_actions:
+        mitigation = f"**{chosen_actions}**: {ACTION_DESCRIPTIONS[chosen_actions]}."
+    else:
+        mitigation = "None (system normal)."
  
     if state == "RECOVERED":
         recovery = (f"Recovery happened this run: all metrics fell below their thresholds, "
@@ -88,6 +123,7 @@ Current state: **{state}**
 - Checked every 5 minutes by the GitHub Actions self-hosted runner.
  
 ## 3. Automated Actions Taken This Run
+Mitigation (randomly selected once per overload event): {mitigation}
 {actions_md}
  
 ## 4. Return to Normal
@@ -102,9 +138,10 @@ Current state: **{state}**
     except Exception as e:
         print(f"Failed to write documentation file: {e}")
 
-def send_discord_message(resource_name, current_val, threshold_val, action_taken):
+def send_discord_message(surpassed, action_taken):
     """
-    Sends a message to the Discord channel if resource usage exceeds the threshold.
+    Sends a message covering every resource usage exceeding the threshold to the Discord channel.
+    Returns True on success, False on failure so the docs can report delivery.
     """
     # Ensure hostname is a clean, pure string data type
     try:
@@ -115,24 +152,26 @@ def send_discord_message(resource_name, current_val, threshold_val, action_taken
     # Generate an ISO 8601 string that Discord's embed processor expects
     iso_timestamp = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
 
+    # One field per exceeded resource (each with its own current value and limit), then the action taken
+    fields = [
+        {"name": name, "value": f"Current: **{float(cur):.2f}%**\nLimit: {float(lim):.2f}%", "inline": True}
+        for name, cur, lim in surpassed
+    ]
+    fields.append({"name": "Automated Action Taken", "value": f"{action_taken}", "inline": False})
+ 
     # Formatted payload matching Discord Webhook execution specs
     payload = {
         "content": "@here **Resource Warning and Auto-Action Alert!**",
         "embeds": [{
             "title": "High VM Resource Usage - Automated Action Triggered",
-            "description": f"Resource limit surpassed on host: **{hostname}**.",
+            "description": f"{len(surpassed)} resource limit(s) surpassed on host: **{hostname}**.",
             "color": 15158332,  # Red color
-            "fields": [
-                {"name": "Resource Type", "value": resource_name, "inline": True},
-                {"name": "Current Usage", "value": f"{float(current_val):.2f}%", "inline": True},
-                {"name": "Threshold Limit", "value": f"{float(threshold_val):.2f}%", "inline": True},
-                {"name": "Automated Action Taken", "value": f"{action_taken}", "inline": False}
-            ],
-           "timestamp": iso_timestamp
+            "fields": fields,
+            "timestamp": iso_timestamp
         }]
     }
-
-    print(f"Attempting to send Discord notification for {resource_name}...")
+ 
+    print(f"Attempting to send Discord notification for: {', '.join(n for n, _, _ in surpassed)}...")
     try:
         res = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
         if res.status_code in [200, 201, 204]:
@@ -148,6 +187,7 @@ def send_discord_message(resource_name, current_val, threshold_val, action_taken
 
 def run_resource_audit():
     actions = []
+    chosen_action = None
     now = lambda: time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
  
     # 1) Evaluate core system telemetry
@@ -176,28 +216,40 @@ def run_resource_audit():
  
         if not os.path.exists(FLAG_FILE_PATH):
             state = "OVERLOAD (newly triggered)"
+            chosen_action = random.choices(list(ACTION_WEIGHTS), weights=list(ACTION_WEIGHTS.values()))[0]
             actions.append(f"Detected threshold breach: {exceeded}.")
+            actions.append(f"Randomly selected mitigation: {chosen_action} ({ACTION_DESCRIPTIONS[chosen_action]}).")
             try:
                 with open(FLAG_FILE_PATH, "w") as f:
+                    f.write(f"ACTION={chosen_action}\n")
                     f.write("--- RESOURCE OVERLOAD DETECTED ---\n")
                     f.write(f"Timestamp: {now()}\n")
                     for n, v, l in surpassed:
                         f.write(f"Resource: {n} | Current: {v:.2f}% | Threshold: {l:.2f}%\n")
-                actions.append(f"Created lock file `{FLAG_FILE_PATH}`; the application sees it and throttles / falls back to a smaller model.")
+                actions.append(f"Created lock file `{FLAG_FILE_PATH}` with ACTION={chosen_action}; the application reads it on each request and applies that mitigation.")
                 print(f"Automated Action: Incident written to {FLAG_FILE_PATH}. Application throttling engaged.")
             except Exception as e:
                 actions.append(f"FAILED to create lock file: {e}")
                 print(f"Failed to create system state file: {e}")
  
-            # Notify only on the transition into overload (prevents notification spam)
-            for n, v, l in surpassed:
-                ok = send_discord_message(n, v, l, action_taken="Traffic Throttling & Fallback Model Engaged")
-                actions.append(f"Discord alert for {n}: {'delivered' if ok else 'FAILED'}.")
+            # One combined message covering every exceeded resource, sent on the transition into overload
+            names = ", ".join(n for n, _, _ in surpassed)
+            ok = send_discord_message(surpassed, action_taken=f"{chosen_action}: {ACTION_DESCRIPTIONS[chosen_action]}")
+            actions.append(f"Discord alert (one message covering {names}): {'delivered' if ok else 'FAILED'}.")
         else:
             state = "OVERLOAD (ongoing)"
+            chosen_action = read_active_action()
             actions.append(f"Still exceeding: {exceeded}.")
-            actions.append("Lock file already present; throttling stays active. No new Discord alert (spam prevention).")
+            if IS_MANUAL_RUN:
+                # Manually triggered run: send one alert even though this isn't a transition
+                names = ", ".join(n for n, _, _ in surpassed)
+                action_text = f"{chosen_action}: {ACTION_DESCRIPTIONS[chosen_action]}" if chosen_action else "Mitigation already active"
+                ok = send_discord_message(surpassed, action_taken=action_text)
+                actions.append(f"Manual run during an ongoing overload; sent a one-time Discord alert covering {names}: {'delivered' if ok else 'FAILED'}.")
+            else:
+                actions.append("Lock file already present (scheduled run); no new Discord alert (alerts only fire on transitions into overload).")
             print("System remains in an overloaded state. Application mitigation action is currently active.")
+
  
         # Append metrics to history ledger
         try:
@@ -213,6 +265,7 @@ def run_resource_audit():
         # AUTOMATED RETURN TO NORMAL: clear the flag file once loads settle below thresholds
         if os.path.exists(FLAG_FILE_PATH):
             state = "RECOVERED"
+            chosen_action = read_active_action()  # read BEFORE the flag file is deleted
             actions.append("All metrics are below their thresholds.")
             try:
                 os.remove(FLAG_FILE_PATH)
@@ -228,7 +281,7 @@ def run_resource_audit():
             state = "NORMAL"
             actions.append("All metrics below thresholds; no mitigation or notification needed.")
             print("All resources are below thresholds. No notification or mitigation required.")
- 
+
     # 4) Documentation is generated last, from what actually happened this run
     write_system_documentation(state, readings, surpassed, actions)
 

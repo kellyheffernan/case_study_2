@@ -1,0 +1,57 @@
+/home/student-admin/case_study_2/check_metrics.py:23: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml
+GPU monitoring disabled: NVML library or hardware not detected. Details: {e}
+Current Metrics -> {'CPU Usage': '6.5%', 'RAM Usage': '34.5%'}
+System remains in an overloaded state. Application mitigation action is currently active.
+Traceback (most recent call last):
+  File "/home/student-admin/case_study_2/check_metrics.py", line 297, in <module>
+    run_resource_audit()
+  File "/home/student-admin/case_study_2/check_metrics.py", line 290, in run_resource_audit
+    write_system_documentation(state, readings, surpassed, actions)
+  File "/home/student-admin/case_study_2/check_metrics.py", line 98, in write_system_documentation
+    if choose and state == "RECOVERED":
+NameError: name 'choose' is not defined
+/home/student-admin/case_study_2/check_metrics.py:23: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml
+GPU monitoring disabled: NVML library or hardware not detected. Details: {e}
+Current Metrics -> {'CPU Usage': '3.5%', 'RAM Usage': '35.0%'}
+System remains in an overloaded state. Application mitigation action is currently active.
+Traceback (most recent call last):
+  File "/home/student-admin/case_study_2/check_metrics.py", line 297, in <module>
+    run_resource_audit()
+  File "/home/student-admin/case_study_2/check_metrics.py", line 290, in run_resource_audit
+    write_system_documentation(state, readings, surpassed, actions)
+  File "/home/student-admin/case_study_2/check_metrics.py", line 98, in write_system_documentation
+    if choose_actions and state == "RECOVERED":
+NameError: name 'choose_actions' is not defined. Did you mean: 'chosen_actions'?
+/home/student-admin/case_study_2/check_metrics.py:23: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml
+GPU monitoring disabled: NVML library or hardware not detected. Details: {e}
+Current Metrics -> {'CPU Usage': '3.6%', 'RAM Usage': '35.0%'}
+System remains in an overloaded state. Application mitigation action is currently active.
+Traceback (most recent call last):
+  File "/home/student-admin/case_study_2/check_metrics.py", line 297, in <module>
+    run_resource_audit()
+  File "/home/student-admin/case_study_2/check_metrics.py", line 290, in run_resource_audit
+    write_system_documentation(state, readings, surpassed, actions)
+  File "/home/student-admin/case_study_2/check_metrics.py", line 100, in write_system_documentation
+    elif chosen_action:
+NameError: name 'chosen_action' is not defined. Did you mean: 'chosen_actions'?
+/home/student-admin/case_study_2/check_metrics.py:23: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml
+GPU monitoring disabled: NVML library or hardware not detected. Details: {e}
+Current Metrics -> {'CPU Usage': '6.1%', 'RAM Usage': '35.0%'}
+System remains in an overloaded state. Application mitigation action is currently active.
+Documentation manifest updated at: /home/student-admin/case_study_2/system_manifest.md
+/home/student-admin/case_study_2/check_metrics.py:23: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml
+GPU monitoring disabled: NVML library or hardware not detected. Details: {e}
+Current Metrics -> {'CPU Usage': '4.0%', 'RAM Usage': '34.2%'}
+System remains in an overloaded state. Application mitigation action is currently active.
+Documentation manifest updated at: /home/student-admin/case_study_2/system_manifest.md
+/home/student-admin/case_study_2/check_metrics.py:23: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml
+GPU monitoring disabled: NVML library or hardware not detected. Details: {e}
+Current Metrics -> {'CPU Usage': '4.0%', 'RAM Usage': '34.1%'}
+System remains in an overloaded state. Application mitigation action is currently active.
+Documentation manifest updated at: /home/student-admin/case_study_2/system_manifest.md
