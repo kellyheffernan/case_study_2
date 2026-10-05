@@ -11,6 +11,7 @@ import psutil
 
 #Flag file path for local application cross-process communication
 FLAG_FILE_PATH = "/tmp/overload_activate.flag"
+HISTORY_LOG_PATH = "/home/student-admin/actions-runner/overload_history.log"  # Persistent ledger
 
 GPU_AVAILABLE = False
 try:
@@ -88,7 +89,6 @@ def run_resource_audit():
             gpu_mem = (mem_info.used / mem_info.total) * 100
             
             print(f"Current GPU Metrics -> GPU Util: {gpu_util}%, VRAM: {gpu_mem:.1f}%")
-
         except Exception as err:
             print(f"Error accessing hardware NVML registers: {err}")
 
@@ -100,20 +100,35 @@ def run_resource_audit():
     if gpu_mem >= THRESHOLD_GPU_MEM: surpassed_resources.append(("GPU VRAM Usage", gpu_mem, THRESHOLD_GPU_MEM))
 
     if surpassed_resources:
-        # AUTOMATED ACTION: Create the indicator flag file to push the host application into Safe Mode
+        # --- [PLACEMENT 1]: Handle Active State Lock File ("w") ---
         if not os.path.exists(FLAG_FILE_PATH):
             try:
+                timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
                 with open(FLAG_FILE_PATH, "w") as f:
-                    f.write(f"Overload initiated at {time.time()}\n")
-                print("Automated Action Triggered: System overload flag created.")
+                    f.write(f"--- RESOURCE OVERLOAD DETECTED ---\n")
+                    f.write(f"Timestamp: {timestamp_str}\n")
+                    for name, current, limit in surpassed_resources:
+                        f.write(f"Resource: {name} | Current: {current:.2f}% | Threshold: {limit:.2f}%\n")
+                
+                print(f"Automated Action: Incident written to {FLAG_FILE_PATH}. Application throttling engaged.")
             except Exception as e:
-                print(f"Failed to create system flag file: {e}")
+                print(f"Failed to create system state file: {e}")
 
             # Send notifications only when transitioning into the overload state (prevents notification spam)
             for name, current, limit in surpassed_resources:
                 send_discord_message(name, current, limit)
         else:
             print("System remains in an overloaded state. Application mitigation action is currently active.")
+
+        # --- [PLACEMENT 2]: Append Metrics to History Ledger File ("a") ---
+        try:
+            timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+            with open(HISTORY_LOG_PATH, "a") as log_file:
+                log_file.write(f"[{timestamp_str}] Alert Active: ")
+                metrics_list = [f"{name}={current:.1f}% (Limit {limit}%)" for name, current, limit in surpassed_resources]
+                log_file.write(", ".join(metrics_list) + "\n")
+        except Exception as e:
+            print(f"Failed to append to history log: {e}")
             
     else:
         # AUTOMATED RETURN TO NORMAL: Clear the flag file once resource loads settle below safety thresholds
@@ -121,6 +136,12 @@ def run_resource_audit():
             try:
                 os.remove(FLAG_FILE_PATH)
                 print("Recovery Action Triggered: System operating safely. Overload flag removed. Normal operations restored.")
+                
+                # --- [PLACEMENT 3]: Log System Recovery to History Ledger File ("a") ---
+                timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+                with open(HISTORY_LOG_PATH, "a") as log_file:
+                    log_file.write(f"[{timestamp_str}] ✅ SYSTEM COOLDOWN: All metrics recovered below threshold limits.\n")
+                    
             except Exception as e:
                 print(f"Error removing system flag file: {e}")
         else:
