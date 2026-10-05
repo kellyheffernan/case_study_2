@@ -116,7 +116,7 @@ def run_resource_audit():
 
             # Send notifications only when transitioning into the overload state (prevents notification spam)
             for name, current, limit in surpassed_resources:
-                send_discord_message(name, current, limit)
+                send_discord_message(name, current, limit, action_taken="Traffic Throttling & Fallback Model Engaged")
         else:
             print("System remains in an overloaded state. Application mitigation action is currently active.")
 
