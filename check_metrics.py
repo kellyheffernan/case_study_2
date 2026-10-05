@@ -11,7 +11,12 @@ import psutil
 
 #Flag file path for local application cross-process communication
 FLAG_FILE_PATH = "/tmp/overload_activate.flag"
-HISTORY_LOG_PATH = "/home/student-admin/actions-runner/overload_history.log"  # Persistent ledger
+
+# Persistent ledger of overloads
+HISTORY_LOG_PATH = "/home/student-admin/actions-runner/overload_history.log"
+
+# Automated local architectural documentation
+DOCS_MANIFEST_PATH = "/home/student-admin/actions-runner/system_manifest.md"
 
 GPU_AVAILABLE = False
 try:
@@ -27,6 +32,44 @@ THRESHOLD_GPU_UTIL = float(os.getenv("THRESHOLD_GPU_UTIL", 5.0))  # Utilization 
 THRESHOLD_GPU_MEM = float(os.getenv("THRESHOLD_GPU_MEM", 5.0))  # Memory usage threshold in percentage
 THRESHOLD_CPU = float(os.getenv("THRESHOLD_CPU", 5.0))  # CPU usage threshold in percentage
 THRESHOLD_RAM = float(os.getenv("THRESHOLD_RAM", 5.0))  # RAM usage threshold in percentage
+
+def write_system_documentation():
+    """
+    Automated Local Action: Explicitly generates and maintains system architecture 
+    documentation on the local VM filesystem to satisfy operational compliance logs.
+    """
+    markdown_content = f"""#System Architecture & Resource Monitoring Manifest
+
+Generated/Validated on: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}
+
+## 1. Configured Thresholds Used
+The monitoring engine evaluates hardware performance boundaries against the following specific configuration guidelines:
+* **CPU Usage:** Overload triggered at \(\ge {THRESHOLD_CPU}\%\)
+* **System Memory (RAM):** Overload triggered at \(\ge {THRESHOLD_RAM}\%\)
+* **GPU Core Utilization:** Overload triggered at \(\ge {THRESHOLD_GPU_UTIL}\%\)
+* **GPU Memory (VRAM):** Overload triggered at \(\ge {THRESHOLD_GPU_MEM}\%\)
+
+## 2. How Resource Usage is Measured
+* **CPU & RAM Tracking:** Monitored using standard library hooks in the kernel space via Python's `psutil` engine package. CPU load is calculated over a 1-second dynamic sample time interval (`interval=1`).
+* **GPU & VRAM Tracking:** Captured natively at the hardware level using the official `nvidia-ml-py` (`pynvml`) engine wrapper to read registry index `0`.
+
+## 3. Automated Mitigation Actions Taken
+If any pool exceeds its target limit, the environment handles triage through a multi-tiered fallback architecture:
+1. **Local System Flag:** An active lock file is deployed to the system path at `{FLAG_FILE_PATH}`.
+2. **Workload Throttling:** Downstream services look up the lock file's existence and restrict throughput, deploy query delay rules, or downgrade parameters to lighter model variations.
+3. **Discord Notification:** A structured embed payload featuring an active channel ping (`@here`) is dispatched directly out via the configured Webhook tunnel.
+
+## 4. How the System Returns to Normal Operation
+* Once a resource check notes that **all four metrics** are operating within safe bounds below the limits, the runtime engine executes a recovery cleanup sequence.
+* The script unlinks and permanently deletes the local lock file flag at `{FLAG_FILE_PATH}`.
+* Downstream application infrastructure detects the file removal step, tears down active defensive throttling scripts, and shifts back into maximum processing mode automatically.
+"""
+    try:
+        with open(DOCS_MANIFEST_PATH, "w") as doc_file:
+            doc_file.write(markdown_content)
+        print(f"Local Compliance Documentation Manifest synchronized at: {DOCS_MANIFEST_PATH}")
+    except Exception as e:
+        print(f"Failed to write local markdown documentation file: {e}")
 
 def send_discord_message(resource_name, current_val, threshold_val, action_taken):
     """
@@ -61,7 +104,6 @@ def send_discord_message(resource_name, current_val, threshold_val, action_taken
     print(f"Attempting to send Discord notification for {resource_name}...")
     try:
         res = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
-
         if res.status_code in [200, 201, 204]:
             print("Discord alert successfully sent!")
         else:
@@ -71,7 +113,10 @@ def send_discord_message(resource_name, current_val, threshold_val, action_taken
         print(f"Failed to transmit network notification: {e}")
 
 def run_resource_audit():
-    # 1) Evaluate Core System Telemetry
+    # 1) Update/Ensure architectural verification records are present locally
+    write_system_documentation()
+
+    # 2) Evaluate Core System Telemetry
     cpu_usage = psutil.cpu_percent(interval=1)
     ram_usage = psutil.virtual_memory().percent
 
@@ -80,7 +125,7 @@ def run_resource_audit():
 
     print(f"Current Metrics -> CPU: {cpu_usage}%, RAM: {ram_usage}%")
 
-    # 2) Evaluate Hardware GPU Telemetry (NVIDIA NVML)
+    # 3) Evaluate Hardware GPU Telemetry (NVIDIA NVML)
     if GPU_AVAILABLE:
         try:
             handle = pynvml.nvmlDeviceGetHandleByIndex(0)
@@ -92,7 +137,7 @@ def run_resource_audit():
         except Exception as err:
             print(f"Error accessing hardware NVML registers: {err}")
 
-    # 3) Check Resource Surpasses & Trigger Automated Actions
+    # 34 Check Resource Surpasses & Trigger Automated Actions
     surpassed_resources = []
     if cpu_usage >= THRESHOLD_CPU: surpassed_resources.append(("CPU Usage", cpu_usage, THRESHOLD_CPU))
     if ram_usage >= THRESHOLD_RAM: surpassed_resources.append(("RAM Usage", ram_usage, THRESHOLD_RAM))
@@ -100,7 +145,7 @@ def run_resource_audit():
     if gpu_mem >= THRESHOLD_GPU_MEM: surpassed_resources.append(("GPU VRAM Usage", gpu_mem, THRESHOLD_GPU_MEM))
 
     if surpassed_resources:
-        # --- [PLACEMENT 1]: Handle Active State Lock File ("w") ---
+        # Handle Active State Lock File ("w")
         if not os.path.exists(FLAG_FILE_PATH):
             try:
                 timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
@@ -120,7 +165,7 @@ def run_resource_audit():
         else:
             print("System remains in an overloaded state. Application mitigation action is currently active.")
 
-        # --- [PLACEMENT 2]: Append Metrics to History Ledger File ("a") ---
+        # Append Metrics to History Ledger File ("a")
         try:
             timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
             with open(HISTORY_LOG_PATH, "a") as log_file:
@@ -137,10 +182,10 @@ def run_resource_audit():
                 os.remove(FLAG_FILE_PATH)
                 print("Recovery Action Triggered: System operating safely. Overload flag removed. Normal operations restored.")
                 
-                # --- [PLACEMENT 3]: Log System Recovery to History Ledger File ("a") ---
+                # Log System Recovery to History Ledger File ("a")
                 timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
                 with open(HISTORY_LOG_PATH, "a") as log_file:
-                    log_file.write(f"[{timestamp_str}] ✅ SYSTEM COOLDOWN: All metrics recovered below threshold limits.\n")
+                    log_file.write(f"[{timestamp_str}] SYSTEM COOLDOWN: All metrics recovered below threshold limits.\n")
                     
             except Exception as e:
                 print(f"Error removing system flag file: {e}")
