@@ -14,10 +14,10 @@ import psutil
 FLAG_FILE_PATH = "/tmp/overload_activate.flag"
 
 # Persistent ledger of overloads
-HISTORY_LOG_PATH = "/home/student-admin/case_study_2/overload_history.log"
+HISTORY_LOG_PATH = "/home/student-admin/case_study_2/logs_and_manifest/overload_history.log"
 
 # Automated local architectural documentation
-DOCS_MANIFEST_PATH = "/home/student-admin/case_study_2/system_manifest.md"
+DOCS_MANIFEST_PATH = "/home/student-admin/case_study_2/logs_and_manifest/system_manifest.md"
 
 GPU_AVAILABLE = False
 try:
