@@ -34,8 +34,10 @@ THRESHOLD_GPU_MEM = float(os.getenv("THRESHOLD_GPU_MEM", 60.0))  # Memory usage 
 THRESHOLD_CPU = float(os.getenv("THRESHOLD_CPU", 60.0))  # CPU usage threshold in percentage
 THRESHOLD_RAM = float(os.getenv("THRESHOLD_RAM", 60.0))  # RAM usage threshold in percentage
 
-# A manual run sends one alert even if the overload is already ongoing; scheduled runs only alert on transitions.
-IS_MANUAL_RUN = os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
+# A "manual run" sends one alert even if the overload is already ongoing; scheduled runs only alert on transitions.
+# GitHub sets GITHUB_EVENT_NAME automatically ("workflow_dispatch" = Run workflow button).
+# From a shell on the VM, use:  FORCE_ALERT=1 ./run_monitor.sh
+IS_MANUAL_RUN = os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch" or os.getenv("FORCE_ALERT") == "1"
 
 # Maps each metric name to its threshold so readings and limits stay in sync
 LIMITS = {
@@ -48,13 +50,13 @@ LIMITS = {
 # Mitigation actions the monitor can randomly choose from (one per overload event).
 ACTION_WEIGHTS = {
     "REDUCE_WORKLOAD": 1,
-    "REJECT_503": 1,
+    "REJECT_REQUESTS": 1,
     "BANNER": 0.5,
 }
 
 ACTION_DESCRIPTIONS = {
     "REDUCE_WORKLOAD": "Reducing workload: capping response length for incoming requests",
-    "REJECT_503": "Rejecting new requests with HTTP 503 (system at capacity)",
+    "REJECT_REQUESTS": "Rejecting new requests with HTTP 503 (system at capacity)",
     "BANNER": "Serving requests normally with a 'near capacity' warning banner",
 }
 
@@ -80,7 +82,7 @@ def read_recent_history(n=10):
         return []
 
 def write_system_documentation(state, readings, surpassed, actions, chosen_action=None):
-    """[CHANGED] Writes a manifest describing what THIS run measured, decided, and did."""
+    """Writes a manifest describing what THIS run measured, decided, and did."""
     now = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
     over = {name for name, _, _ in surpassed}
  
@@ -144,6 +146,10 @@ def send_discord_message(surpassed, action_taken):
     Sends a message covering every resource usage exceeding the threshold to the Discord channel.
     Returns True on success, False on failure so the docs can report delivery.
     """
+    if not DISCORD_WEBHOOK_URL or not DISCORD_WEBHOOK_URL.strip():
+        print("Discord webhook not configured; skipping notification.")
+        return False
+
     # Ensure hostname is a clean, pure string data type
     try:
         hostname = str(os.uname().nodename)
@@ -173,19 +179,23 @@ def send_discord_message(surpassed, action_taken):
     }
  
     print(f"Attempting to send Discord notification for: {', '.join(n for n, _, _ in surpassed)}...")
-    try:
-        res = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
-        if res.status_code in [200, 201, 204]:
-            print("Discord alert successfully sent!")
-            return True
-        else:
-            print(f"Discord rejected the message format. Code: {res.status_code}")
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        try:
+            res = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
+            if res.status_code in [200, 201, 204]:
+                print("Discord alert successfully sent!")
+                return True
+            print(f"Discord rejected the message. Code: {res.status_code}")
             print(f"Response details: {res.text}")
-            return False
-    except Exception as e:
-       # Log only the exception type: requests errors often embed the full webhook URL (token included)
-        print(f"Failed to transmit network notification: {type(e).__name__}")
-        return False
+            if res.status_code != 429 and res.status_code < 500:
+                return False  # bad URL or payload: retrying won't help
+        except Exception as e:
+            # Log only the exception type: requests errors often embed the full webhook URL (token included)
+            print(f"Failed to transmit network notification: {type(e).__name__}")
+        if attempt < max_attempts:
+            time.sleep(2 * attempt)  # brief backoff, then retry (covers rate limits and network blips)
+    return False
 
 def run_resource_audit():
     actions = []
@@ -240,9 +250,9 @@ def run_resource_audit():
             actions.append(f"Discord alert (one message covering {names}): {'delivered' if ok else 'FAILED'}.")
         else:
             state = "OVERLOAD (ongoing)"
-            chosen_action = read_active_action()
+            chosen_action = read_active_action()  # sticky: don't re-roll mid-overload
             try:
-                os.utime(FLAG_FILE_PATH, None)  # lets the app treat an old mtime as "monitor died"
+                os.utime(FLAG_FILE_PATH, None)  # heartbeat: lets the app treat an old mtime as "monitor died"
             except Exception:
                 pass
             actions.append(f"Still exceeding: {exceeded}.")
@@ -289,10 +299,9 @@ def run_resource_audit():
  
     # 4) [MOVED] Documentation is generated last, from what actually happened this run
     write_system_documentation(state, readings, surpassed, actions, chosen_action)
-
-
+ 
+ 
 if __name__ == "__main__":
     if not DISCORD_WEBHOOK_URL or DISCORD_WEBHOOK_URL.strip() == "":
-        print("Fatal Error: Discord Webhook URL is not set. Please set the DISCORD_WEBHOOK_URL environment variable.")
-    else:
-        run_resource_audit()
+        print("Warning: DISCORD_WEBHOOK_URL is not set. Monitoring and mitigation still run, but no Discord alerts will be sent.")
+    run_resource_audit()
