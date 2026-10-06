@@ -27,11 +27,11 @@ BOOTSTRAP_KEY="$HOME/.ssh/student-admin_key" # original bootstrap key
 LOG="$PWD/recovery.log" # written by check_and_recovery.sh
 
 # ---- VM-side names from the top of check_and_recovery.sh ----
-SERVICE="group16-recipe-chatbot"
-APP_DIR="/home/student-admin"
-APP_URL="http://${VM_HOST}:8016/"
-VENV_DIR="$APP_DIR/venv"
-UNIT="/etc/systemd/system/$SERVICE.service"
+APP_URL="http://${VM_HOST}:8016/" # Gradio URL used by the health check
+SERVICE="group16-recipe-chatbot" # systemd unit name for the app
+APP_DIR="/home/student-admin" # where the repo is cloned on the VM
+VENV_DIR="$APP_DIR/venv" # python virtual environment
+UNIT="/etc/systemd/system/$SERVICE.service" # the service file
 
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes)
 vm()  { ssh "${SSH_OPTS[@]}" -i "$KEY" -p "$VM_PORT" "$VM_USER@$VM_HOST" "$@"; }            # run on VM with group 16 key
