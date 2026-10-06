@@ -2,6 +2,8 @@ import gradio as gr
 #import spaces commenting this out because we won't be able to use ZeroGPU anymore
 from huggingface_hub import HfApi, InferenceClient #following github cs2 sample code for token validation
 from transformers import pipeline
+import os
+import time
 
 LOCAL_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 REMOTE_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
@@ -9,6 +11,23 @@ REMOTE_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
 max_tokens = 900
 temperature = 0.7
 top_p = 0.95
+
+FLAG_FILE_PATH = "/tmp/overload_activate.flag"
+FLAG_STALE_AFTER = 15 * 60   # seconds; monitor refreshes the flag each run, so older = monitor is dead
+REDUCED_MAX_TOKENS = 150
+KNOWN_ACTIONS = {"REDUCE_WORKLOAD", "REJECT_REQUESTS", "BANNER"}
+
+def current_overload_action():
+    """None when normal, otherwise REDUCE_WORKLOAD / REJECT_REQUESTS / BANNER."""
+    try:
+        if time.time() - os.path.getmtime(FLAG_FILE_PATH) > FLAG_STALE_AFTER:
+            return None
+        with open(FLAG_FILE_PATH) as f:
+            first_line = f.readline().strip()
+    except OSError:
+        return None
+    action = first_line.split("=", 1)[1].strip() if first_line.startswith("ACTION=") else ""
+    return action if action in KNOWN_ACTIONS else "REDUCE_WORKLOAD"   # flag exists but unreadable: fail toward less load
 
 pipe = pipeline(
     "text-generation",
@@ -89,7 +108,16 @@ def respond(
     pantry_staples,
     use_local_model,
     hf_token, #this is going to be provided by the user 
-):
+ ):
+    action = current_overload_action()
+
+    if action == "REJECT_REQUESTS":
+        yield "The system is currently at capacity. Please try again in a few minutes."
+        return
+
+    effective_max_tokens = REDUCED_MAX_TOKENS if action == "REDUCE_WORKLOAD" else max_tokens
+    banner = "The system is operating near capacity; responses may be slower.\n\n" if action == "BANNER" else ""
+
     messages = [{"role": "system", "content": system_message}]
     messages.extend(normalize_history(history))
     pantry_text = ", ".join(pantry_staples) if pantry_staples else "None selected"
@@ -109,12 +137,12 @@ def respond(
 
         response = local_generate(
             messages,
-            max_tokens,
+            effective_max_tokens,
             temperature,
             top_p,
         )
 
-        yield response
+        yield banner + response
         return
 
     print("[MODE] api")
@@ -133,7 +161,7 @@ def respond(
 
     for chunk in client.chat_completion(
         messages,
-        max_tokens=max_tokens,
+        max_tokens=effective_max_tokens,
         stream=True,
         temperature=temperature,
         top_p=top_p,
@@ -145,7 +173,7 @@ def respond(
             token = choices[0].delta.content
 
         response += token
-        yield response
+        yield banner + response
 
 #need to validate user's token now
 def validate_hf_token(hf_token):

@@ -14,10 +14,10 @@ import psutil
 FLAG_FILE_PATH = "/tmp/overload_activate.flag"
 
 # Persistent ledger of overloads
-HISTORY_LOG_PATH = "/home/student-admin/case_study_2/logs_and_manifest/overload_history.log"
+HISTORY_LOG_PATH = "/home/student-admin/actions-runner/overload_history.log"
 
 # Automated local architectural documentation
-DOCS_MANIFEST_PATH = "/home/student-admin/case_study_2/logs_and_manifest/system_manifest.md"
+DOCS_MANIFEST_PATH = "/home/student-admin/actions-runner/system_manifest.md"
 
 GPU_AVAILABLE = False
 try:
@@ -47,13 +47,13 @@ LIMITS = {
 
 # Mitigation actions the monitor can randomly choose from (one per overload event).
 ACTION_WEIGHTS = {
-    "SMALL_MODEL": 1,
+    "REDUCE_WORKLOAD": 1,
     "REJECT_503": 1,
     "BANNER": 0.5,
 }
 
 ACTION_DESCRIPTIONS = {
-    "SMALL_MODEL": "Switched to a smaller model for incoming requests",
+    "REDUCE_WORKLOAD": "Reducing workload: capping response length for incoming requests",
     "REJECT_503": "Rejecting new requests with HTTP 503 (system at capacity)",
     "BANNER": "Serving requests normally with a 'near capacity' warning banner",
 }
@@ -79,8 +79,8 @@ def read_recent_history(n=10):
     except Exception:
         return []
 
-def write_system_documentation(state, readings, surpassed, actions, chosen_actions=None):
-    """Writes a manifest describing what THIS run measured, decided, and did."""
+def write_system_documentation(state, readings, surpassed, actions, chosen_action=None):
+    """[CHANGED] Writes a manifest describing what THIS run measured, decided, and did."""
     now = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
     over = {name for name, _, _ in surpassed}
  
@@ -92,10 +92,10 @@ def write_system_documentation(state, readings, surpassed, actions, chosen_actio
     history_md = "".join(f"- {line}" for line in read_recent_history()) or "- No events logged yet.\n"
     gpu_note = "GPU metrics read via NVML (device 0)." if GPU_AVAILABLE else "No GPU detected; GPU metrics skipped."
  
-    if chosen_actions and state == "RECOVERED":
-        mitigation = f"**{chosen_actions}** ({ACTION_DESCRIPTIONS[chosen_actions]}) was lifted this run."
-    elif chosen_actions:
-        mitigation = f"**{chosen_actions}**: {ACTION_DESCRIPTIONS[chosen_actions]}."
+    if chosen_action and state == "RECOVERED":
+        mitigation = f"**{chosen_action}** ({ACTION_DESCRIPTIONS[chosen_action]}) was lifted this run."
+    elif chosen_action:
+        mitigation = f"**{chosen_action}**: {ACTION_DESCRIPTIONS[chosen_action]}."
     else:
         mitigation = "None (system normal)."
  
@@ -183,7 +183,8 @@ def send_discord_message(surpassed, action_taken):
             print(f"Response details: {res.text}")
             return False
     except Exception as e:
-        print(f"Failed to transmit network notification: {e}")
+       # Log only the exception type: requests errors often embed the full webhook URL (token included)
+        print(f"Failed to transmit network notification: {type(e).__name__}")
         return False
 
 def run_resource_audit():
@@ -240,6 +241,10 @@ def run_resource_audit():
         else:
             state = "OVERLOAD (ongoing)"
             chosen_action = read_active_action()
+            try:
+                os.utime(FLAG_FILE_PATH, None)  # lets the app treat an old mtime as "monitor died"
+            except Exception:
+                pass
             actions.append(f"Still exceeding: {exceeded}.")
             if IS_MANUAL_RUN:
                 # Manually triggered run: send one alert even though this isn't a transition
@@ -250,7 +255,6 @@ def run_resource_audit():
             else:
                 actions.append("Lock file already present (scheduled run); no new Discord alert (alerts only fire on transitions into overload).")
             print("System remains in an overloaded state. Application mitigation action is currently active.")
-
  
         # Append metrics to history ledger
         try:
@@ -282,9 +286,9 @@ def run_resource_audit():
             state = "NORMAL"
             actions.append("All metrics below thresholds; no mitigation or notification needed.")
             print("All resources are below thresholds. No notification or mitigation required.")
-
-    # 4) Documentation is generated last, from what actually happened this run
-    write_system_documentation(state, readings, surpassed, actions)
+ 
+    # 4) [MOVED] Documentation is generated last, from what actually happened this run
+    write_system_documentation(state, readings, surpassed, actions, chosen_action)
 
 
 if __name__ == "__main__":
