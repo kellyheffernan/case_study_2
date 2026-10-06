@@ -6,4 +6,4 @@ set -a
 source ./monitor.env
 set +a
 
-/usr/bin/python3 check_metrics.py >> monitor_run.log 2>&1
+/usr/bin/python3 check_metrics.py >> ../actions-runner/monitor_run.log 2>&1
